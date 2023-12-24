@@ -1,0 +1,178 @@
+@startuml
+title "Сценарий ЦБ1-ЦБ3 + HLA"
+
+autonumber
+participant "Система\nпланирования" as dispatcher
+participant "ОрВД" as gov
+participant "1. Связь" as conn 
+participant "7. Самодиагностика\nи мониторинг" as selfdiag
+participant "10. Модуль ЭЦП" as verifier
+participant "11. Модуль\nрассчета\nмаршрута" as router
+participant "4. Навигация" as nav
+participant "9. Контроль батареи" as battery
+participant "8. Приводы" as servos 
+participant "6. Полётный\nконтроллер" as autopilot
+participant "12. Модуль\nуправления\nнейтрализатором" as prosecutor
+participant "2. Сбор и анализ\nданных" as processing
+participant "5. Нейтрализация" as shoker
+
+group Инициация вылета
+  dispatcher -> conn: полётное задание
+  conn -> gov++: регистрация вылета
+    note over gov, conn
+      регистрация включает в себя 
+      - идентификатор и основные параметры дрона
+      - идентификатор полётного задания, авторизованного ОрВД
+    end note
+  gov -> gov: проверка и\nрегистрация\nвылета конкретного\nдрона
+  gov --> conn--: разрешение на вылет
+
+  conn -> verifier++: полётное задание\nразрешение на вылет
+  verifier -> verifier: проверка аутентичности
+  verifier -> router++: полётное задание\nразрешение на вылет
+  deactivate verifier
+
+  group Самодиагностика
+    nav -> router: текущие координаты
+    battery -> router: уровень заряда батареи
+    router -> selfdiag++: состояние подсистем
+  end
+  group Отправка данных подсистем
+    selfdiag -> conn: телеметрия\n- координаты\n- диагностика\n- события мониторинга
+    conn -> dispatcher: телеметрия\nи результаты мониторинга
+    conn -> gov: координаты
+    note over gov
+      возможен запрет продолжения полёта
+      и требование немедленной посадки
+    end note
+  end
+end
+
+loop Следование в район мониторинга 
+  group Перемещение
+    router -> router: расчет маршрута
+    router -> autopilot++: параметры\nперемещения
+    autopilot -> autopilot: расчёт управляющих команд
+    autopilot -> servos++: управляющие команды
+    servos -> servos: выполнение команд
+    autopilot --> router: результат\nвыполнения
+    deactivate servos
+    deactivate autopilot
+  end
+
+  router -> router: проверка\nдостижения\nзаданного\nрайона
+
+  group Самодиагностика
+    nav -> router: текущие координаты
+    battery -> router: уровень заряда батареи
+    router -> selfdiag: состояние подсистем
+  end
+
+  group Отправка данных подсистем
+    selfdiag -> conn: телеметрия\n- координаты\n- диагностика\n- события мониторинга
+    conn -> dispatcher: телеметрия\nи результаты мониторинга
+    conn -> gov: координаты
+    note over gov
+      возможен запрет продолжения полёта
+      и требование немедленной посадки
+    end note
+  end
+end
+
+group Прибытие в район мониторинга
+  router -> prosecutor++: прибытие в район мониторинга
+  prosecutor -> processing++: включение режима мониторинга
+end
+
+loop Работа в районе мониторинга
+
+  processing -> processing: сбор и\nанализ данных
+  processing -> prosecutor: результаты мониторинга
+
+  prosecutor -> router: произвести маневр
+
+  group Перемещение
+    router -> router: расчет маршрута
+    router -> autopilot++: параметры\nперемещения
+    autopilot -> autopilot: расчёт управляющих команд
+    autopilot -> servos++: управляющие команды
+    servos -> servos: выполнение команд
+    autopilot --> router: результат\nвыполнения
+    deactivate servos
+    deactivate autopilot
+  end
+
+  group Обнаружено правонарушение
+    prosecutor -> prosecutor: нарушитель в зоне воздействия
+    prosecutor -> shoker++: произвести воздействие
+    shoker --> prosecutor--: нарушитель нейтрализован
+  end
+
+  router -> router: проверка\nусловий завершения\nмиссии
+
+  group Самодиагностика
+    nav -> router: текущие координаты
+    battery -> router: уровень заряда батареи
+    router -> selfdiag: состояние подсистем
+  end
+
+  group Отправка данных подсистем
+    selfdiag -> conn: телеметрия\n- координаты\n- диагностика\n- события мониторинга
+    conn -> dispatcher: телеметрия\nи результаты мониторинга
+    conn -> gov: координаты
+    note over gov
+      возможен запрет продолжения полёта
+      и требование немедленной посадки
+    end note
+  end
+
+end
+
+group Завершение миссии
+  router -> prosecutor: прекращение мониторинга
+  prosecutor -> processing: отключение режима мониторинга
+  deactivate processing
+  prosecutor --> router: мониторинг прекращен
+  deactivate prosecutor
+end
+
+loop Возвращение на базу 
+  group Перемещение
+    router -> router: расчет маршрута
+    router -> autopilot++: параметры\nперемещения
+    autopilot -> autopilot: расчёт управляющих команд
+    autopilot -> servos++: управляющие команды
+    servos -> servos: выполнение команд
+    autopilot --> router: результат\nвыполнения
+    deactivate servos
+    deactivate autopilot
+  end
+
+  router -> router: проверка\nдостижения\nзаданного\nрайона
+
+  group Самодиагностика
+    nav -> router: текущие координаты
+    battery -> router: уровень заряда батареи
+    router -> selfdiag: состояние подсистем
+  end
+
+  group Отправка данных подсистем
+    selfdiag -> conn: телеметрия\n- координаты\n- диагностика\n- события мониторинга
+    conn -> dispatcher: телеметрия\nи результаты мониторинга
+    conn -> gov: координаты
+    note over gov
+      возможен запрет продолжения полёта
+      и требование немедленной посадки
+    end note
+  end
+end
+
+group Финализация миссии
+  router -> selfdiag: прибытие на базу
+  deactivate router
+  selfdiag -> conn--: миссия завершена
+  deactivate selfdiag
+  conn -> gov: миссия завершена
+  conn -> dispatcher: миссия завершена
+end
+@enduml
